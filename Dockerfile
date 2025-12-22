@@ -17,7 +17,7 @@ COPY frontend /app/frontend
 COPY backend /app/backend
 
 # Set working directory to backend so paths are relative as expected
-WORKDIR /app/backend
+WORKDIR /app
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -26,8 +26,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 
 # Copy startup script and fix line endings (CRLF -> LF)
-COPY backend/startup.sh /app/backend/startup.sh
-RUN sed -i 's/\r$//' /app/backend/startup.sh && chmod +x /app/backend/startup.sh
+COPY startup.sh /app/startup.sh
+RUN sed -i 's/\r$//' /app/startup.sh && chmod +x /app/startup.sh
 
 # Run the application via startup script
 CMD ["/app/startup.sh"]
