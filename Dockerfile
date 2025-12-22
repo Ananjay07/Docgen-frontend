@@ -30,4 +30,4 @@ COPY backend/startup.sh /app/backend/startup.sh
 RUN sed -i 's/\r$//' /app/backend/startup.sh && chmod +x /app/backend/startup.sh
 
 # Run the application via startup script
-CMD ["/app/backend/startup.sh"]
+CMD ["/app/startup.sh"]
