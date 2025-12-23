@@ -73,8 +73,8 @@ echo "----------------------------------------"
 # Run Uvicorn
 # --host 0.0.0.0 : Bind to all interfaces (required for container)
 # --port $LISTEN_PORT : Listen on the port Azure expects
-export PYTHONPATH=/app/backend
+export PYTHONPATH=/home/site/wwwroot/backend
 
 exec python -m uvicorn app.main:app \
   --host 0.0.0.0 \
-  --port "$LISTEN_PORT"
+  --port ${WEBSITES_PORT:-8000}

@@ -43,6 +43,10 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Docorator Backend")
 
+@app.get("/")
+def root():
+    return {"status": "running"}
+
 # Serve Static Assets (CSS, JS)
 app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
