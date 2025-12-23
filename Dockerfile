@@ -21,7 +21,8 @@ WORKDIR /app/backend
 
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r backend/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
 
 # Expose port (Documentation only, Azure uses WEBSITES_PORT)
 EXPOSE 8000
