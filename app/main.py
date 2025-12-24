@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
@@ -6,6 +6,8 @@ import uuid
 import logging
 from typing import Optional, Dict
 from dotenv import load_dotenv
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
 
 load_dotenv(override=False)
 
@@ -14,18 +16,9 @@ from .ai_client import generate_structured_with_gemini, GeminiError
 from .database import get_db
 from .models import User, Document
 from .auth import get_password_hash, verify_password, create_access_token, get_current_user
+from fastapi.middleware.cors import CORSMiddleware
 # Init Database Tables
 # Base.metadata.create_all(bind=engine) # Removed for Cosmos DB
-
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # or your static web app URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("docgen")
@@ -38,7 +31,6 @@ STORAGE_DIR = Path(os.getenv("STORAGE_DIR", BASE_DIR.parent / "data"))
 GENERATED = STORAGE_DIR / "generated"           # backend/generated or /home/data/generated
 TEMPLATES_DIR = BASE_DIR / "templates"              # backend/app/templates
 
-STOP_DIR_CREATION = GENERATED.mkdir(parents=True, exist_ok=True)
 GENERATED.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -47,12 +39,13 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Docorator Backend")
 
-@app.get("/")
-def root():
-    return {"status": "ok"}
-
-# Serve Static Assets (CSS, JS)
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or your static web app URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # @app.get("/")
 # async def read_index():
@@ -309,7 +302,6 @@ def delete_document(doc_id: str, current_user: User = Depends(get_current_user),
     documents_container.delete_item(item=doc_id, partition_key=doc.partitionKey)
     
     return {"msg": "Document deleted"}
-
 
 @app.get("/dashboard/download/{doc_id}")
 def download_dashboard_doc(doc_id: str, format: str = "pdf", current_user: User = Depends(get_current_user), db: dict = Depends(get_db)):
