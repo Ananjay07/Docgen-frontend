@@ -8,7 +8,6 @@ google-generativeai
 aiofiles
 httpx
 pytest
-docx2pdf
 sqlalchemy
 passlib[bcrypt]
 python-jose[cryptography]

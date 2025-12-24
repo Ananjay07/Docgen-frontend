@@ -45,7 +45,7 @@ app = FastAPI(title="Docorator Backend")
 
 @app.get("/")
 def root():
-    return {"status": "running"}
+    return {"status": "ok"}
 
 # Serve Static Assets (CSS, JS)
 app.mount("/static", StaticFiles(directory="../frontend"), name="static")
@@ -346,7 +346,6 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
         )
 
     # Get fields from client or Gemini
-# Get fields from client or Gemini
     if req.use_gemini:
         try:
             fields = generate_structured_with_gemini(
@@ -361,8 +360,6 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
             # Merge user-provided fields (like Name, Email) into AI fields
             # User fields take precedence if they are explicitly provided (non-empty)
             if req.fields:
-                # User fields take precedence if they are explicitly provided (non-empty)
-                # BUT: Do not overwrite generated lists (experience, etc.) with the user's "stub" lists.
                 skip_keys = {"experience_list", "projects", "education", "achievements", "skills"}
                 for k, v in req.fields.items():
                     if v and k not in skip_keys:
@@ -396,46 +393,14 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
         logger.exception("Template rendering failed")
         raise HTTPException(status_code=500, detail=f"Template rendering failed: {str(e)}")
 
-    # If caller wants the DOCX only, return it
+    # Force DOCX return (PDF conversion logic removed)
     final_file = out_docx
     media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-    if req.return_docx:
-        if not out_docx.exists():
-            raise HTTPException(status_code=500, detail="DOCX was not created")
-        # Final file is already out_docx
-    else:
-        # Cross-platform PDF conversion
-        # Updated Naming: use consistent nomenclature for PDF too: {doc_type}_{unique_id}.pdf
-        pdf_name = f"{doc_type}_{unique_id}.pdf"
-        pdf_output = GENERATED / pdf_name
-        
-        # import subprocess (already imported if not moved) - good practice to safeguard
-        import subprocess
-        import platform # ensure platform available
-        
-        if os.name == 'nt':  # Windows
-            from docx2pdf import convert
-            convert(str(out_docx), str(pdf_output))
-        else:  # Linux (Azure)
-            subprocess.run([
-                "soffice", "--headless", "--convert-to", "pdf", "--outdir", 
-                str(GENERATED), str(out_docx)
-            ], check=True)
-            
-            # Libreoffice usually outputs same-name-as-input.pdf?
-            # if out_docx is "resume_123.docx", it makes "resume_123.pdf"
-            # Since our out_docx IS named consistent, we are good!
-            # BUT: wait, we manually set pdf_output above. If libreoffice auto-names it, we just need to verify matches.
-            pass # fallback checks below
-            
-        if pdf_output.exists():
-            final_file = pdf_output
-            media_type = 'application/pdf'
-            
+    if not out_docx.exists():
+        raise HTTPException(status_code=500, detail="DOCX was not created")
+
     # --- SAVE TO DATABASE ---
-    # Store path relative to BASE_DIR (backend/app) that points to backend/data/generated
-    # BASE_DIR/../data/generated/file == backend/data/generated/file
     rel_path = f"../data/generated/{final_file.name}"
     
     new_doc = Document(
@@ -449,92 +414,8 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
     db.commit()
     db.refresh(new_doc)
 
-
     return FileResponse(
         path=str(final_file),
         filename=final_file.name,
         media_type=media_type
     )
-    # NOTE: Code flow continues to PDF generation if return_docx is False.
-    # If return_docx is True, we return above.
-    # We must insert DB saving logic BEFORE returning.
-
-    # RE-WRITING LOGIC BLOCK TO FIX RETURNING EARLY
-
-
-    # Generate PDF via LibreOffice (headless) - Azure/Linux compatible
-    pdf_output = out_docx.with_suffix(".pdf")
-    if not req.return_docx:
-        try:
-            import subprocess
-            import platform
-
-            if platform.system() == "Windows":
-                # Keep docx2pdf for local Windows testing (if preferred) or use LibreOffice if installed
-                from docx2pdf import convert
-                convert(str(out_docx), str(pdf_output))
-            else:
-                # Linux/Container (Azure)
-                cmd = [
-                    "soffice",
-                    "--headless",
-                    "--convert-to", "pdf",
-                    "--outdir", str(GENERATED),
-                    str(out_docx)
-                ]
-                subprocess.run(cmd, check=True)
-                
-            logger.info("Generated PDF: %s", pdf_output)
-
-        except Exception as e:
-            logger.exception("PDF conversion failed")
-            return JSONResponse(status_code=500, content={
-                "error": "PDF conversion failed (Ensure LibreOffice is installed in container)", 
-                "detail": str(e)
-            })
-
-        if not pdf_output.exists():
-            logger.error("PDF output file missing after conversion")
-            return JSONResponse(status_code=500, content={"error": "PDF generation produced no file"})
-
-    return FileResponse(
-        path=str(pdf_output),
-        filename=pdf_output.name,
-        media_type="application/pdf"
-    )
-
-    # Note: The original code returned FileResponse above, which STOPS execution.
-    # We need to save to DB *BEFORE* returning the file response, or handle it differently.
-    # But FileResponse is a streaming response.
-    
-    # Better approach: Save to DB first, then return.
-    
-    # Let's determine final output file (DOCX or PDF)
-    final_file = pdf_output
-    if req.return_docx:
-        final_file = out_docx
-        
-    # Save to DB
-    # We store path relative to BASE_DIR for portability, or use the filename if in known dir
-    # generated folder is BASE_DIR.parent / "generated"
-    # Let's store relative path from app/ folder? No, lets store relative from backend root.
-    # BASE_DIR is .../backend/app
-    # GENERATED is .../backend/generated
-    
-    rel_path = f"../generated/{final_file.name}"
-    
-    new_doc = Document(
-        user_id=current_user.id,
-        filename=final_file.name,
-        file_path=rel_path,
-        doc_type=doc_type
-    )
-    db.add(new_doc)
-    db.commit()
-
-    return FileResponse(
-        path=str(final_file),
-        filename=final_file.name,
-        media_type='application/pdf' if final_file.suffix == '.pdf' else 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    )
-# Reload trigger updated
