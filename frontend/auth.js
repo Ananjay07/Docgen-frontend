@@ -30,7 +30,7 @@ function logout() {
 async function authenticatedFetch(url, options = {}) {
     const token = getToken();
     if (!token) {
-        window.location.href = "/static/login.html";
+        window.location.href = "/login.html";
         return null;
     }
 
