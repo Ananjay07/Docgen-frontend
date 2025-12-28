@@ -506,11 +506,6 @@ textarea:focus {
     background: #eef2ff;
 }
 
-/* Modal */
-.modal-backdrop {
-    /* Kept for future use */
-}
-
 /* Input Group */
 .input-group-box {
     background: #f8fafc;
