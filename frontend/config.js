@@ -1,5 +1,5 @@
 const config = {
-    API_URL: "http://localhost:8000" // Default for local development
+    API_URL: "https://docgen-backend-g2d0d3ehf9dmdbgb.centralindia-01.azurewebsites.net" // Live Azure Backend
 };
 
 // Make it global
