@@ -492,30 +492,48 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
 
                 if doc_type == "letter":
                     import re
+                    logger.info("--- CLEANING LETTER ---")
+                    
                     # 1. Clean Body Salutations (Start)
                     if "body" in fields:
                          body_text = fields["body"]
+                         logger.info(f"Body Before: {body_text[:50]}...")
+                         
                          # Remove "Dear X," or "To X," at the very start
                          body_text = re.sub(r"^\s*(Dear|To)\s+.*?,?\s*", "", body_text, flags=re.IGNORECASE).strip()
+                         
                          # Remove "Subject: ..." if AI added it
                          body_text = re.sub(r"^\s*Subject:.*?\n", "", body_text, flags=re.IGNORECASE).strip()
+                         
                          # Remove "Sincerely, X" from the end (Aggressive)
-                         # Matches newline + keyword + anything to end
-                         body_text = re.sub(r"\n\s*(Sincerely|Regards|Best Regards|Best|Cheers|Yours|Warm Regards).*$", "", body_text, flags=re.IGNORECASE|re.DOTALL).strip()
+                         # Use flexible newline matching for Windows/Linux (\r\n vs \n)
+                         # Look for the LAST occurrence of a closing phrase to be safe, or just cut from the first one found near the end.
+                         # Logic: Split by closing phrases, take the first part? No, that might kill "Yours sincerely" in a quote.
+                         # Better: Regex for newlines followed by closing keyword
+                         
+                         clean_pattern = r"[\r\n]+\s*(Sincerely|Regards|Best Regards|Best|Cheers|Yours|Warm Regards|Thank you).*?(\n|$).*$"
+                         body_text = re.sub(clean_pattern, "", body_text, flags=re.IGNORECASE|re.DOTALL).strip()
+                         
                          fields["body"] = body_text
+                         logger.info(f"Body After: {body_text[:50]}...")
 
                     # 2. Clean Receiver Name (Prevent "Dear Dear")
                     if "receiver_name" in fields:
+                        orig = fields["receiver_name"]
                         # Remove "Dear " from name if present
                         fields["receiver_name"] = re.sub(r"^\s*(Dear|Mr\.|Ms\.|Mrs\.|Dr\.)\s+", "", fields["receiver_name"], flags=re.IGNORECASE).strip()
+                        logger.info(f"Name clean: '{orig}' -> '{fields['receiver_name']}'")
 
                     # 3. Clean Salutation Field if it exists
                     if "receiver_salutation" in fields and fields["receiver_salutation"]:
-                         # If template has "Dear {{ salutation }}", we want just the name.
-                         # But if template is "{{ salutation }}", we want "Dear Name".
-                         # Based on "Dear Dear", the template likely has "Dear".
-                         # So let's strip "Dear" from this too.
-                         fields["receiver_salutation"] = re.sub(r"^\s*(Dear)\s+", "", fields["receiver_salutation"], flags=re.IGNORECASE).strip()
+                         orig = fields["receiver_salutation"]
+                         # Strip "Dear"
+                         val = re.sub(r"^\s*(Dear)\s+", "", fields["receiver_salutation"], flags=re.IGNORECASE).strip()
+                         # Strip trailing punctuation (commas) which cause "Name,,"
+                         val = re.sub(r"[,]+$", "", val).strip()
+                         
+                         fields["receiver_salutation"] = val
+                         logger.info(f"Salutation clean: '{orig}' -> '{val}'")
 
         except GeminiError as ge:
             logger.exception("Gemini generation failed")
