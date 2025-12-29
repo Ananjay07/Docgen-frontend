@@ -490,6 +490,16 @@ def generate(req: GenerateRequest, current_user: User = Depends(get_current_user
                     if v and k not in skip_keys:
                         fields[k] = v
 
+            # --- POST-PROCESSING: CLEANUP AI OUTPUT ---
+            if doc_type == "letter" and "body" in fields:
+                import re
+                body_text = fields["body"]
+                # Remove "Dear X," from the start
+                body_text = re.sub(r"^\s*Dear\s+.*?,?\s*", "", body_text, flags=re.IGNORECASE).strip()
+                # Remove "Sincerely, X" from the end
+                body_text = re.sub(r"\s*(Sincerely|Regards|Best|Cheers|Yours).*?(\n|$).*$", "", body_text, flags=re.IGNORECASE|re.DOTALL).strip()
+                fields["body"] = body_text
+
         except GeminiError as ge:
             logger.exception("Gemini generation failed")
             raise HTTPException(status_code=502, detail=f"AI generation failed: {str(ge)}")
