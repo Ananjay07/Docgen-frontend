@@ -63,7 +63,7 @@ app.add_middleware(
 
 @app.get("/")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.1 (SHA Fix Applied)"}
 
 @app.get("/health-db")
 def health_db(db_status: dict = Depends(get_db)):
