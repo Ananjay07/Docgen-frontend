@@ -387,13 +387,7 @@ async function downloadGeneratedDoc(id, format) {
     }
 }
 
-    } catch (error) {
-    alert("Error: " + error.message);
-} finally {
-    btn.innerHTML = originalText;
-    btn.disabled = false;
-}
-}
+
 // --- Initialization ---
 
 async function init() {
