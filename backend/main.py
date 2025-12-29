@@ -120,34 +120,44 @@ class UserSchema(BaseModel):
 
 @app.post("/auth/signup")
 def signup(user: UserSchema, db: dict = Depends(get_db)):
-    users_container = db["users"]
-    
-    # Check if exists
-    query = "SELECT * FROM c WHERE c.email = @email"
-    items = list(users_container.query_items(
-        query=query, 
-        parameters=[{"name": "@email", "value": user.email}],
-        enable_cross_partition_query=True
-    ))
-    
-    if items:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create User Model
-    new_user = User(
-        email=user.email,
-        hashed_password=get_password_hash(user.password),
-        full_name=user.full_name,
-        profession=user.profession,
-        security_question=user.security_question,
-        security_answer_hash=get_password_hash(user.security_answer),
-        partitionKey=user.email # Set partition key
-    )
-    
-    # Save to Cosmos (dump model to dict)
-    users_container.create_item(body=new_user.dict(by_alias=True))
-    
-    return {"msg": "User created successfully"}
+    try:
+        users_container = db["users"]
+        
+        # Check if exists
+        query = "SELECT * FROM c WHERE c.email = @email"
+        # Optimize query: set partition key if possible, but email is PK so this is cross-partition by default unless scoped?
+        # Actually PK is /email, so we can scope it!
+        # But 'query_items' with enable_cross_partition_query=True is safer for now.
+        
+        items = list(users_container.query_items(
+            query=query, 
+            parameters=[{"name": "@email", "value": user.email}],
+            enable_cross_partition_query=True
+        ))
+        
+        if items:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Create User Model
+        new_user = User(
+            email=user.email,
+            hashed_password=get_password_hash(user.password),
+            full_name=user.full_name,
+            profession=user.profession,
+            security_question=user.security_question,
+            security_answer_hash=get_password_hash(user.security_answer),
+            partitionKey=user.email # Set partition key
+        )
+        
+        # Save to Cosmos (dump model to dict)
+        users_container.create_item(body=new_user.dict(by_alias=True))
+        
+        return {"msg": "User created successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.exception("Signup failed")
+        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
 
 class UserProfile(BaseModel):
     id: int
